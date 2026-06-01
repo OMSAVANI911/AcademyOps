@@ -1,0 +1,8 @@
+name,phone,source,stage
+John Doe,555-0100,Website,new
+jane smith,555-0101,  fAcEbOoK  ,Contacted
+No Phone Guy,,Website,New
+Duplicate Dan,555-0100,fb,new
+Alice Jones,555-0102,ig,QUALIFIED
+Bad Stage Bob,555-0103,Website,SuperAwesomeStage
+Alice Jones,555-0102,Instagram,Qualified

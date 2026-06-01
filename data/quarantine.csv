@@ -1,0 +1,4 @@
+name,phone,source,stage,rejection_reason
+No Phone Guy,,Website,New,Missing required field
+Duplicate Dan,555-0100,fb,new,Duplicate phone in this batch
+Alice Jones,555-0102,Instagram,Qualified,Duplicate phone in this batch
