@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AcademyOps Dashboard</title>
+</head>
+<body>
+    <h1>AcademyOps Lead Dashboard</h1>
+    <hr>
+    <h2>Sales Pipeline</h2>
+    
+    <table border="1" id="leadsTable" cellpadding="5">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Source</th>
+                <th>Stage</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+
+    <script>
+        // This is the "Customer" placing an order with your "Waiter" (the API)
+        fetch('/api/v1/leads')
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.querySelector('#leadsTable tbody');
+                data.data.forEach(lead => {
+                    const row = `<tr>
+                        <td>${lead.id}</td>
+                        <td>${lead.name}</td>
+                        <td>${lead.phone}</td>
+                        <td>${lead.source}</td>
+                        <td><strong>${lead.stage}</strong></td>
+                    </tr>`;
+                    tableBody.innerHTML += row;
+                });
+            })
+            .catch(error => console.error('Error fetching leads:', error));
+    </script>
+</body>
+</html>
