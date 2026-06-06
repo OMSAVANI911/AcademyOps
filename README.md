@@ -328,7 +328,7 @@ PYTHONPATH=. pytest -v
 Expected result:
 
 ```text
-3 passed
+9 passed
 ```
 
 ---
