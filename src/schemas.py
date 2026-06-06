@@ -1,17 +1,18 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 
 
 class LeadResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
     id: int
     name: str
     phone: str
     source: str
     stage: str
     notes: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class CreateLeadRequest(BaseModel):

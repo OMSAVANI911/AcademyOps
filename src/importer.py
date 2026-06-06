@@ -1,5 +1,4 @@
 import csv
-import os
 from repository import LeadRepository, DuplicateLeadError
 
 def run_import(input_file, quarantine_file):

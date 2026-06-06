@@ -72,7 +72,7 @@ def evaluate_accuracy():
             correct += 1
         
     accuracy = (correct / total) * 100
-    print(f"-------------------------------------------")
+    print("-------------------------------------------")
     print(f"Accuracy: {accuracy:.2f}% ({correct}/{total})\n")
 
 if __name__ == "__main__":

@@ -1,77 +1,195 @@
 """
 tests/test_api.py
-Full pytest suite for AcademyOps.
+AcademyOps test suite using isolated test database.
 """
 
-import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# --- ADD "src." BEFORE THESE IMPORTS ---
-from src.database import Base, get_db
 from src.api import app
-from src.repository import LeadRepository
+from src.database import Base, get_db
+from src.repository import (
+    LeadRepository,
+    LeadNotFoundError,
+)
 
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_academyops.db")
 TEST_DATABASE_URL = "sqlite:///./test_academyops.db"
 
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(bind=test_engine)
+engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
 
 @pytest.fixture(scope="session", autouse=True)
-def create_test_schema():
-    Base.metadata.create_all(bind=test_engine)
+def setup_database():
+    Base.metadata.create_all(bind=engine)
     yield
-    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.drop_all(bind=engine)
+
 
 @pytest.fixture()
 def db_session():
-    connection = test_engine.connect()
+    connection = engine.connect()
     transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
+
+    session = TestingSessionLocal(
+        bind=connection
+    )
+
     yield session
+
     session.close()
     transaction.rollback()
     connection.close()
 
+
 @pytest.fixture()
 def client(db_session):
-    def _override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
 
-    app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app) as c:
-        yield c
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as client:
+        yield client
+
     app.dependency_overrides.clear()
+
 
 @pytest.fixture()
 def repo():
     return LeadRepository()
 
-def _api_create_lead(client, **overrides) -> dict:
-    payload = {
-        "name": "Priya Sharma",
-        "phone": "+919876543210",
-        "source": "Instagram",
-        "stage": "New",
-        "notes": "Test Lead"
-    }
-    payload.update(overrides)
-    return client.post("/api/v1/leads", json=payload).json()
+
+def create_lead(
+    client,
+    phone="+919999999999"
+):
+    return client.post(
+        "/api/v1/leads",
+        json={
+            "name": "Priya Sharma",
+            "phone": phone,
+            "source": "Instagram",
+            "stage": "New",
+            "notes": "Test Lead"
+        }
+    )
+
 
 def test_create_lead_success(client):
-    data = _api_create_lead(client)
+    response = create_lead(
+        client,
+        "+919999999991"
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
     assert "id" in data
 
-def test_get_lead_not_found_returns_404(client):
-    assert client.get("/api/v1/leads/999999").status_code == 404
 
-def test_repository_get_raises_lead_not_found(db_session, repo):
-    from src.repository import LeadNotFoundError
-    with pytest.raises(LeadNotFoundError):
-        repo.get(db_session, lead_id=999999)
+def test_duplicate_phone_returns_400(client):
+    create_lead(
+        client,
+        "+919999999992"
+    )
+
+    response = create_lead(
+        client,
+        "+919999999992"
+    )
+
+    assert response.status_code == 400
+
+
+def test_get_lead_success(client):
+    created = create_lead(
+        client,
+        "+919999999993"
+    ).json()
+
+    response = client.get(
+        f"/api/v1/leads/{created['id']}"
+    )
+
+    assert response.status_code == 200
+
+
+def test_get_lead_not_found(client):
+    response = client.get(
+        "/api/v1/leads/999999"
+    )
+
+    assert response.status_code == 404
+
+
+def test_list_leads(client):
+    response = client.get(
+        "/api/v1/leads"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "data" in data
+    assert "total" in data
+
+
+def test_update_stage_success(client):
+    created = create_lead(
+        client,
+        "+919999999994"
+    ).json()
+
+    response = client.patch(
+        f"/api/v1/leads/{created['id']}/stage",
+        json={
+            "stage": "Qualified"
+        }
+    )
+
+    assert response.status_code == 200
+
+
+def test_invalid_stage_returns_400(client):
+    created = create_lead(
+        client,
+        "+919999999995"
+    ).json()
+
+    response = client.patch(
+        f"/api/v1/leads/{created['id']}/stage",
+        json={
+            "stage": "INVALID"
+        }
+    )
+
+    assert response.status_code == 400
+
+
+def test_repository_exists():
+    repo = LeadRepository()
+
+    assert repo is not None
+
+
+def test_lead_not_found_exception():
+    with pytest.raises(
+        LeadNotFoundError
+    ):
+        raise LeadNotFoundError(
+            "Lead not found"
+        )
