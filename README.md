@@ -55,3 +55,12 @@ The system follows a modular architecture:
 
 ## Testing
 [cite_start]Run the full test suite with: `pytest`[cite: 526].
+## 📐 System Architecture
+
+```mermaid
+graph TD
+    A[Client/Web Browser] --> B(FastAPI Backend)
+    B --> C{Repository Layer}
+    C --> D[(PostgreSQL Database)]
+    E[Streamlit Dashboard] --> D
+    B --> F[Classification Engine]
