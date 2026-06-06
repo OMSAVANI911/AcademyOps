@@ -1,109 +1,109 @@
-from flask import Flask, request, jsonify, render_template
+from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from typing import List, Optional
+import uvicorn
 from repository import LeadRepository, LeadNotFoundError, DuplicateLeadError
 
-app = Flask(__name__)
+app = FastAPI()
 repo = LeadRepository()
+templates = Jinja2Templates(directory="src/templates")
 
-# --- NEW: Serve the HTML Webpage ---
-@app.route('/')
-def dashboard():
-    return render_template('index.html')
-# -----------------------------------
+class LeadSchema(BaseModel):
+    id: int
+    name: str
+    phone: str
+    source: str
+    stage: str
+    notes: str
 
-@app.errorhandler(404)
-def resource_not_found(e):
-    return jsonify({"error": "Resource not found"}), 404
+class PaginatedLeadsResponse(BaseModel):
+    data: List[LeadSchema]
+    page: int
+    limit: int
+    total: int
 
-@app.errorhandler(500)
-def internal_error(e):
-    return jsonify({"error": "Internal server error"}), 500
+class CreateLeadRequest(BaseModel):
+    name: str
+    phone: str
+    source: Optional[str] = ""
+    stage: Optional[str] = "New"
+    notes: Optional[str] = ""
 
-@app.route('/api/v1/leads/<int:lead_id>', methods=['GET'])
-def get_lead(lead_id):
+class UpdateStageRequest(BaseModel):
+    stage: str
+
+# --- Serve the HTML Webpage ---
+@app.get("/", response_class=HTMLResponse)
+def dashboard(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/api/v1/leads/{lead_id}", response_model=LeadSchema)
+def get_lead(lead_id: int):
     try:
         lead = repo.get(lead_id)
-        return jsonify(lead), 200
+        return lead
     except LeadNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
+        raise HTTPException(status_code=404, detail=str(e))
 
-@app.route('/api/v1/leads', methods=['GET'])
-def list_leads():
-    stage_filter = request.args.get('stage')
-    source_filter = request.args.get('source')
-    
-    try:
-        page = int(request.args.get('page', 1))
-        limit = int(request.args.get('limit', 10))
-        if page < 1 or limit < 1:
-            raise ValueError
-    except ValueError:
-        return jsonify({"error": "Page and limit must be positive integers"}), 400
-
+@app.get("/api/v1/leads", response_model=PaginatedLeadsResponse)
+def list_leads(
+    stage: Optional[str] = Query(None),
+    source: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1)
+):
+    # Keep original database logic
     leads = repo.list()
-    
-    if stage_filter:
-        leads = [l for l in leads if l['stage'].lower() == stage_filter.lower()]
-    if source_filter:
-        leads = [l for l in leads if l['source'].lower() == source_filter.lower()]
         
+    # Exact same filtering logic as the Flask implementation
+    if stage:
+        leads = [l for l in leads if l['stage'].lower() == stage.lower()]
+    if source:
+        leads = [l for l in leads if l['source'].lower() == source.lower()]
+
+    # Exact same pagination logic
     start_idx = (page - 1) * limit
     end_idx = start_idx + limit
     paginated_leads = leads[start_idx:end_idx]
-    
-    return jsonify({
+
+    return {
         "data": paginated_leads,
         "page": page,
         "limit": limit,
         "total": len(leads)
-    }), 200
+    }
 
-@app.route('/api/v1/leads', methods=['POST'])
-def create_lead():
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({"error": "Request body must be JSON"}), 400
-        
-    name = data.get('name')
-    phone = data.get('phone')
-    
-    if not name or not phone:
-        return jsonify({"error": "Name and phone are required fields"}), 400
-        
+@app.post("/api/v1/leads", status_code=201)
+def create_lead(data: CreateLeadRequest):
     try:
         lead_id = repo.create(
-            name=name,
-            phone=phone,
-            source=data.get('source', ''),
-            stage=data.get('stage', 'New'),
-            notes=data.get('notes', '')
+            name=data.name,
+            phone=data.phone,
+            source=data.source,
+            stage=data.stage,
+            notes=data.notes
         )
-        return jsonify({"id": lead_id, "message": "Lead created successfully"}), 201
+        return {"id": lead_id, "message": "Lead created successfully"}
     except DuplicateLeadError as e:
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e))
 
-@app.route('/api/v1/leads/<int:lead_id>/stage', methods=['PATCH'])
-def update_stage(lead_id):
-    data = request.get_json()
-    
-    if not data or 'stage' not in data:
-        return jsonify({"error": "Request body must contain 'stage'"}), 400
-        
-    new_stage = data['stage']
-    
+@app.patch("/api/v1/leads/{lead_id}/stage")
+def update_stage(lead_id: int, data: UpdateStageRequest):
     try:
-        repo.update_stage(lead_id, new_stage)
-        return jsonify({"message": f"Stage updated to {new_stage}"}), 200
+        repo.update_stage(lead_id, data.stage)
+        return {"message": f"Stage updated to {data.stage}"}
     except LeadNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
+        raise HTTPException(status_code=404, detail=str(e))
 
-@app.route('/api/v1/leads/<int:lead_id>', methods=['DELETE'])
-def delete_lead(lead_id):
+@app.delete("/api/v1/leads/{lead_id}", status_code=204)
+def delete_lead(lead_id: int):
     try:
         repo.delete(lead_id)
-        return '', 204
+        return None
     except LeadNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
+        raise HTTPException(status_code=404, detail=str(e))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    uvicorn.run('api:app', host='127.0.0.1', port=8000, reload=True)
