@@ -35,3 +35,23 @@ To run this project locally, follow these precise configuration steps:
 ```bash
 git clone <your-repository-url>
 cd academyops
+# AcademyOps v1.0
+
+[cite_start]AcademyOps is a lead-to-enrollment management system for EasySkill Career Academy (ECA)[cite: 12].
+
+## Architecture
+
+The system follows a modular architecture:
+* [cite_start]**Backend**: FastAPI with PostgreSQL persistence[cite: 414, 423].
+* [cite_start]**Intelligence**: Rule-based intent classification[cite: 484].
+* [cite_start]**Analytics/Dashboard**: Streamlit-based operations view[cite: 362].
+
+## Setup & Run
+1. [cite_start]Clone the repository[cite: 517].
+2. Install dependencies: `pip install -r requirements.txt`.
+3. [cite_start]Initialize the database: `python -c "from src import database; database.init_db()"`.
+4. [cite_start]Run the API: `uvicorn api:app --reload`[cite: 529].
+5. [cite_start]Run the dashboard: `streamlit run src/dashboard.py`[cite: 408].
+
+## Testing
+[cite_start]Run the full test suite with: `pytest`[cite: 526].
