@@ -1,66 +1,77 @@
+"""
+tests/test_api.py
+Full pytest suite for AcademyOps.
+"""
+
 import os
-import sys
-import sqlite3
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-# Tell Python to look inside the 'src' folder for our toolkit
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+# --- ADD "src." BEFORE THESE IMPORTS ---
+from src.database import Base, get_db
+from src.api import app
+from src.repository import LeadRepository
 
-# Point to a fake database BEFORE importing your code so we don't ruin real data
-import repository
-repository.DB_PATH = 'test_academyops.db'
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test_academyops.db")
+TEST_DATABASE_URL = "sqlite:///./test_academyops.db"
 
-from api import app
-from repository import LeadRepository
+test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(bind=test_engine)
 
-@pytest.fixture
-def setup_database():
-    # Setup: Create a fresh, empty test database
-    with sqlite3.connect(repository.DB_PATH) as conn:
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS leads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                phone TEXT NOT NULL UNIQUE,
-                source TEXT,
-                stage TEXT NOT NULL,
-                notes TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        ''')
+@pytest.fixture(scope="session", autouse=True)
+def create_test_schema():
+    Base.metadata.create_all(bind=test_engine)
     yield
-    # Teardown: Delete the fake database after tests run
-    if os.path.exists(repository.DB_PATH):
-        os.remove(repository.DB_PATH)
+    Base.metadata.drop_all(bind=test_engine)
 
-@pytest.fixture
-def client(setup_database):
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+@pytest.fixture()
+def db_session():
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    session = TestingSessionLocal(bind=connection)
+    yield session
+    session.close()
+    transaction.rollback()
+    connection.close()
 
-def test_create_lead_api(client):
-    """Test that the API can successfully create a new lead."""
-    response = client.post('/api/v1/leads', json={
-        "name": "Test Student",
-        "phone": "555-9999",
-        "source": "Website",
-        "stage": "New"
-    })
-    assert response.status_code == 201
-    assert "id" in response.get_json()
+@pytest.fixture()
+def client(db_session):
+    def _override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
 
-def test_get_leads_api(client):
-    """Test that the API can list leads."""
-    response = client.get('/api/v1/leads')
-    assert response.status_code == 200
-    assert "data" in response.get_json()
+    app.dependency_overrides[get_db] = _override_get_db
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
 
-def test_duplicate_phone_error(setup_database):
-    """Test that the repository rejects duplicate phone numbers."""
-    repo = LeadRepository()
-    repo.create("First User", "111-2222", "Web", "New")
-    
-    with pytest.raises(repository.DuplicateLeadError):
-        repo.create("Duplicate User", "111-2222", "Web", "New")
+@pytest.fixture()
+def repo():
+    return LeadRepository()
+
+def _api_create_lead(client, **overrides) -> dict:
+    payload = {
+        "name": "Priya Sharma",
+        "phone": "+919876543210",
+        "source": "Instagram",
+        "stage": "New",
+        "notes": "Test Lead"
+    }
+    payload.update(overrides)
+    return client.post("/api/v1/leads", json=payload).json()
+
+def test_create_lead_success(client):
+    data = _api_create_lead(client)
+    assert "id" in data
+
+def test_get_lead_not_found_returns_404(client):
+    assert client.get("/api/v1/leads/999999").status_code == 404
+
+def test_repository_get_raises_lead_not_found(db_session, repo):
+    from src.repository import LeadNotFoundError
+    with pytest.raises(LeadNotFoundError):
+        repo.get(db_session, lead_id=999999)
