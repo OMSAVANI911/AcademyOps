@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
 from repository import LeadRepository, LeadNotFoundError, DuplicateLeadError
+from classifier import classify_message
 
 app = FastAPI()
 repo = LeadRepository()
@@ -33,6 +34,14 @@ class CreateLeadRequest(BaseModel):
 
 class UpdateStageRequest(BaseModel):
     stage: str
+
+class MessageRequest(BaseModel):
+    message: str
+
+class MessageResponse(BaseModel):
+    intent: str
+    suggested_stage: str
+    reply: str
 
 # --- Serve the HTML Webpage ---
 @app.get("/", response_class=HTMLResponse)
@@ -104,6 +113,17 @@ def delete_lead(lead_id: int):
         return None
     except LeadNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/v1/leads/{lead_id}/message", response_model=MessageResponse)
+def handle_lead_message(lead_id: int, req: MessageRequest):
+    try:
+        # Verify the lead exists
+        repo.get(lead_id)
+    except LeadNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+    classification = classify_message(req.message)
+    return classification
 
 if __name__ == '__main__':
     uvicorn.run('api:app', host='127.0.0.1', port=8000, reload=True)

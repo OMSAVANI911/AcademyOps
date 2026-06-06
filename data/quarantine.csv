@@ -1,4 +1,8 @@
 name,phone,source,stage,rejection_reason
+John Doe,555-0100,Website,new,Duplicate phone already in database
+jane smith,555-0101,  fAcEbOoK  ,Contacted,Duplicate phone already in database
 No Phone Guy,,Website,New,Missing required field
 Duplicate Dan,555-0100,fb,new,Duplicate phone in this batch
+Alice Jones,555-0102,ig,QUALIFIED,Duplicate phone already in database
+Bad Stage Bob,555-0103,Website,SuperAwesomeStage,Duplicate phone already in database
 Alice Jones,555-0102,Instagram,Qualified,Duplicate phone in this batch
